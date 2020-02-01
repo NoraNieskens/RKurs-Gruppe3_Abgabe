@@ -1,0 +1,122 @@
+---
+title: "Support Vector Machine für Umsätze-Datensatz"
+output: html_notebook
+---
+
+ 
+```{r}
+# Importing Function Packages
+library(readr)
+library(e1071)
+library(Metrics)
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
+# Importiere reduzierten Datensatz 
+
+Umsaetze <- read_csv("UmsatzWF.csv")
+Tag_Juni <- read_delim("Data_1.6.2019_1.csv", 
+    ";", escape_double = FALSE, col_types = cols(Datum = col_date(format = "%Y-%m-%d")), 
+    trim_ws = TRUE)
+
+Tag_Juni<- na.omit(Tag_Juni)
+#View(Tag_Juni)
+
+# lege kategorielle Daten als Faktoren fest
+Umsaetze$Warentyp <- as.factor(Umsaetze$Warentyp); Umsaetze$Wochentag <- as.factor(Umsaetze$Wochentag); Umsaetze$Monat <- as.factor(Umsaetze$Monat); Umsaetze$Ferienname <- as.factor(Umsaetze$Ferienname); Umsaetze$Feiertag <- as.factor(Umsaetze$Feiertag); Umsaetze$Jahr <- as.factor(Umsaetze$Jahr); Umsaetze$KielerWoche <- as.factor(Umsaetze$KielerWoche)
+
+# lege kategorielle Daten als Faktoren fest
+Tag_Juni$Warentyp <- as.factor(Tag_Juni$Warentyp); Tag_Juni$Wochentag <- as.factor(Tag_Juni$Wochentag); Tag_Juni$Monat <- as.factor(Tag_Juni$Monat); Tag_Juni$Ferienname <- as.factor(Tag_Juni$Ferienname); Tag_Juni$Feiertag <- as.factor(Tag_Juni$Feiertag); Tag_Juni$Jahr <- as.factor(Tag_Juni$Jahr); Tag_Juni$KielerWoche <- as.factor(Tag_Juni$KielerWoche)
+
+#verbindet und trennt vom ursprünglichen Datensatz
+Help<-rbind(Umsaetze, Tag_Juni)
+
+Juni_select<- subset(Help, Help$Datum == "2019-06-01")
+
+
+# teile Datensatz in Training- und Test-Datensätze auf
+set.seed(101)  
+sample <- sample.int(n = nrow(Umsaetze), size = floor(.70*nrow(Umsaetze)), replace = F)
+train <- Umsaetze[sample, ]
+test  <- Umsaetze[-sample, ]
+
+#View(test)
+```
+
+
+```{r}
+#Optional: Verkleinerung des Datensatzes um Modelloptimierung zu testen
+train <- sample_frac(train, .10)
+```
+
+
+
+```{r}
+# Training mit SVM
+
+# Estimation of an SVM with optimized weighting parameters and given standard hyper parameters
+# Typically not used; instead, the function svm_tune is used in order to also get a model with optimized hyper parameters
+#model_svm <- svm(price ~ bathrooms, house_pricing_train)
+# Estimation of various SVM (each with optimized weighting parameters) using systematically varied hyper parameters (typically called 'grid search' approach) and cross validation
+# the resulting object includes the optimal model in the element named 'best.model'
+
+svm_tune <- tune(svm, Umsatz ~ Wochentag + Warentyp * Monat + KielerWoche + Ferienname + Temperatur + Jahr, data=train, ranges = list(epsilon = seq(0.1,1,0.1), cost = 2^(1:3)))
+
+```
+
+```{r}
+# Zusammenfassung der Modellparameter
+summary(svm_tune)
+svm_tune
+```
+
+
+```{r}
+svm_tune$best.model
+```
+
+
+
+```{r}
+# Überprüfe die Qualität von Vorhersagen
+
+# Calculating the prediction for the training data using the best model according to the grid search
+pred_train <- predict(svm_tune$best.model, train)
+
+# Calculating the prediction for the test data using the best model according to the grid search
+pred_test <- predict(svm_tune$best.model, test)
+
+Tag_predict<- predict(svm_tune$best.model, Juni_select)
+View(Tag_predict)
+
+
+# Calculating the prediction quality for the training data using the MAPE+
+mape(train$Umsatz, pred_train)
+
+# Calculating the prediction quality for the training data using the MAPE
+mape(test$Umsatz, pred_test)
+```
+
+
+```{r}
+test$Umsatz_predict <- pred_test
+train$Umsatz_predict <- pred_train
+```
+
+```{r}
+#erstellt Barplot zur umsatz vorhersage
+Juni_select$Umsatz_pred <- Tag_predict
+
+ggplot(Juni_select, aes(x=Warentyp, y=Umsatz_pred)) + 
+  geom_bar(stat="identity")+
+  labs(title="Umsatzvorhersage für den 01.06.2019",
+        y = "Umsatz[€]")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+```
+

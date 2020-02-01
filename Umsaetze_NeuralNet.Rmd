@@ -1,0 +1,211 @@
+---
+title: "Estimation of Neural Net"
+output: html_notebook
+---
+
+### # Installation ggf. noch benötigter Pakete ###
+```{r}
+# Nur ausführen, beim allerersten Mal !!
+install.packages("fastDummies")
+install.packages("reticulate")
+install.packages("Metrics")
+library(reticulate)
+py_install("pandas")
+py_install("numpy")
+py_install("tensorflow")
+```
+
+
+### Vorbereitung der Umgebung ###
+```{r}
+# Umgebungsvariablen löschen
+remove(list = ls())
+# Einbinden benötogter Funktionsbibliotheken
+library(reticulate)
+library(readr)
+library(fastDummies)
+library(ggplot2)
+library(Metrics)
+# Funktionsdefinitionen
+#' Title Fast creation of normalized variables
+#' Quickly create normalized columns from numeric type columns in the inputted data. This function is useful for statistical analysis when you want normalized columns rather than the actual columns.
+#'
+#' @param .data An object with the data set you want to make normalized columns from.
+#' @param norm_values Dataframe of column names, means, and standard deviations that is used to create corresponding normalized variables from.
+#'
+#' @return A data.frame (or tibble or data.table, depending on input data type) with same number of rows as inputted data and original columns plus the newly created normalized. columns.
+#' @export
+#'
+#' @examples
+norm_cols <- function (.data, norm_values = NULL) {
+  for (i in 1:nrow(norm_values)  ) {
+    .data$norm <- (.data[[norm_values$name[i]]] - norm_values$mean[i]) / norm_values$sd[i]
+    names(.data)[length(.data)] <- paste0(norm_values$name[i], "_norm")
+  }
+  return (.data)
+}
+#' Title Creation of a Dataframe including the Information to Standardize Variables
+#' This function is meant to be used in combination with the function norm_cols
+#'
+#' @param .data A data set including the variables you want to get the means and standard deviations from.
+#' @param select_columns A vector with a list of variable names for which you want to get the means and standard deviations from.
+#'
+#' @return A data.frame (or tibble or data.table, depending on input data type) including the names, means, and standard deviations of the variables included in the select_columns argument.
+#' @export
+#'
+#' @examples
+get.norm_values <- function (.data, select_columns = NULL) {
+  result <- NULL
+  for (col_name in select_columns) {
+    mean <- mean(.data[[col_name]], na.rm = TRUE)
+    sd <- sd(.data[[col_name]], na.rm = TRUE)
+    result <- rbind (result, c(mean, sd))
+  }
+  result <- as.data.frame(result, stringsAsFactors = FALSE)
+  result <- data.frame (select_columns, result, stringsAsFactors = FALSE)
+  names(result) <- c("name", "mean", "sd")
+  return (result)
+}
+```
+
+
+### Aufbereitung der Daten ###
+```{r}
+# Einlesen der Daten
+Umsaetze <- read_csv("UmsatzWF.csv")
+Umsaetze <- na.omit(Umsaetze)
+```
+
+```{r}
+# Rekodierung von kategoriellen Variablen (zu Dummy-Variablen)
+dummy_list <- c("Warentyp", "Wochentag", "KielerWoche", "Jahr", "Monat", "Ferienname")
+Umsaetze_dummy = dummy_cols(Umsaetze, dummy_list)
+# Standardisierung von metrischen Variablen
+norm_list <- c("Umsatz", "Temperatur")
+# Berechnung der Mittelwerte und Standardabweichungen der zu standardisierenden Variablen
+norm_values_list <- get.norm_values(Umsaetze_dummy, norm_list)
+# Standardisierung der angegebenen metrischen Variablen
+Umsaetze_norm <- norm_cols(Umsaetze_dummy, norm_values_list)
+# Definition von Variablenlisten, um das Arbeiten mit diesen zu erleichtern
+Warentyp_dummies = c('Warentyp_Brot', 'Warentyp_Broetchen', 'Warentyp_Croissant', 'Warentyp_Konditorei', 'Warentyp_Kuchen')
+#Bewoelkung_dummies = c('Bewoelkung_6', 'Bewoelkung_3',  'Bewoelkung_7', 'Bewoelkung_5', 'Bewoelkung_0', 'Bewoelkung_2', 'Bewoelkung_1', 'Bewoelkung_4', 'Bewoelkung_8')
+Wochentag_dummies = c('Wochentag_Montag', 'Wochentag_Dienstag', 'Wochentag_Mittwoch', 'Wochentag_Donnerstag', 'Wochentag_Freitag', 'Wochentag_Samstag','Wochentag_Sonntag')
+KielerWoche_dummies = c('KielerWoche_0', 'KielerWoche_1')
+Jahr_dummies = c('Jahr_2013', 'Jahr_2014', 'Jahr_2015', 'Jahr_2016', 'Jahr_2017', 'Jahr_2018', 'Jahr_2019')
+Monat_dummies = c('Monat_7', 'Monat_8', 'Monat_9', 'Monat_10', 'Monat_11', 'Monat_12', 'Monat_1', 'Monat_2', 'Monat_3', 'Monat_4', 'Monat_5', 'Monat_6')
+Ferienname_dummies = c('Ferienname_Sommerferien', 'Ferienname_0', 'Ferienname_Herbstferien', 'Ferienname_Winterferien', 'Ferienname_Osterferien')
+
+# Definition der Features (der unabhängigen Variablen auf deren Basis die Vorhersagen erzeugt werden sollen)
+features = c('Temperatur_norm', Warentyp_dummies, Wochentag_dummies, KielerWoche_dummies, Jahr_dummies, Monat_dummies, Ferienname_dummies)
+# Definition der Label-Variable (der abhaengigen Variable, die vorhergesagt werden soll) sowie
+label = 'Umsatz_norm'
+# Zufallszähler setzen, um die zufällige Partitionierung bei jedem Durchlauf gleich zu halten
+set.seed(1)
+# Bestimmung der Indizes des Traininsdatensatzes
+train_ind <- sample(seq_len(nrow(Umsaetze_norm)), size = floor(0.80 * nrow(Umsaetze_norm)))
+# Teilen in Trainings- und Testdatensatz
+train_dataset = Umsaetze_norm[train_ind, features]
+test_dataset = Umsaetze_norm[-train_ind, features]
+# Selektion der Variable, die als Label definiert wurde
+train_labels = Umsaetze_norm[train_ind, label]
+test_labels = Umsaetze_norm[-train_ind, label]
+```
+
+
+### Schätzung des Neuronalen Netzes
+```{python}
+# Benoetigte Python Libraries einbinden
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+# Definition der Form des tiefen neuronalen Netzes (Deep Neural Nets)
+model = keras.Sequential([
+  layers.Dense(5, activation='relu', input_shape=[len(r.train_dataset.keys())]),
+  layers.Dense(6, activation='relu'),
+#  layers.Dense(3, activation='relu'),
+  layers.Dense(1)
+])
+# Definition der Kosten-(Loss-)Funktion und der Optimierungsfunktion mit seinen Hyperparametern
+model.compile(loss="mse",
+              optimizer=tf.keras.optimizers.SGD(lr=1e-4, momentum=0.9))
+# Ausgabe einer Zusammenfassung zur Form des Modells, das geschaetzt wird (nicht notwendig)
+model.summary()
+# Schaetzung des Modells
+history = model.fit(r.train_dataset, r.train_labels, epochs=50, validation_split = 0.1, verbose=2)
+```
+
+
+### Speichern des Neuronalen Netzes für spätere Vorhersagen ###
+```{python}
+model.save("python_model.h5")
+```
+
+
+### Auswertung der Modelloptimierung ###
+```{r}
+# Grafische Ausgabe der Modelloptimierung
+# create data
+data <- data.frame(val_loss = unlist(py$history$history$val_loss),
+                  loss = unlist(py$history$history$loss))
+# Plot
+ggplot(data[-1,]) +
+  geom_line( aes(x=1:length(val_loss), y=val_loss, colour = "Validation Loss" )) +
+  geom_line( aes(x=1:length(loss), y=loss, colour = "Training Loss" )) +
+  scale_colour_manual( values = c("Training Loss"="blue", "Validation Loss"="red") ) +
+  labs(title="Loss Function Values During Optimization") +
+  xlab("Iteration Number") +
+  ylab("Loss") 
+```
+
+
+### Laden eines gespeicherten Neuronalen Netzes ###
+```{python}
+model = keras.models.load_model("python_model_best.h5")
+```
+
+
+### Auswertung der Schätzergebnisse ###
+```{r}
+# Schätzung der (normierten) Preise für die Trainings- und Testdaten
+train_predictions_norm <- py$model$predict(train_dataset)
+test_predictions_norm <- py$model$predict(test_dataset)
+# Rückberechnung der normierten Preisschätzungen zu den tatsächlichen Preisschätzungen bzw. Preisen
+train_predictions <- (train_predictions_norm * norm_values_list$sd[1] ) + norm_values_list$mean[1]
+test_predictions <- (test_predictions_norm * norm_values_list$sd[1]) + norm_values_list$mean[1]
+# Selektion der zugehörigen tatsächlichen Preise
+train_actuals <- Umsaetze$Umsatz[train_ind]
+test_actuals <- Umsaetze$Umsatz[-train_ind]
+# Vergleich der Gütekriterien für die Traingings- und Testdaten
+cat(paste0("MAPE on the Training Data:\t", format(mape(train_actuals, train_predictions)*100, digits=3, nsmall=2)))
+cat(paste0("\nMAPE on the Test Data:\t\t", format(mape(test_actuals, test_predictions)*100, digits=3, nsmall=2)))
+```
+
+```{r}
+## Grafischer vergleich der vorhergesagten und der tatsächlichen Preise für die Trainings- und Testdaten
+# Zusammenstellung der Daten für die Plots
+data_train <- data.frame(prediction = train_predictions, actual = train_actuals)
+data_test <- data.frame(prediction = test_predictions, actual = test_actuals)
+# Plot der Ergebnisse der Trainingsdaten
+ggplot(data_train[1:100,]) +
+  geom_line( aes(x=1:length(prediction), y=prediction, colour = "Predicted Values" )) +
+  geom_line( aes(x=1:length(actual), y=actual, colour = "Actual Values" )) +
+  scale_colour_manual( values = c("Predicted Values"="blue", "Actual Values"="red") ) +
+  labs(title="Predicted and Actual Values for the Training Data") +
+  xlab("Case Number") +
+  ylab("Umsatz in €") 
+# Plot der Ergebnisse der Testdaten
+ggplot(data_test[1:100,]) +
+  geom_line( aes(x=1:length(prediction), y=prediction, colour = "Predicted Values" )) +
+  geom_line( aes(x=1:length(actual), y=actual, colour = "Actual Values" )) +
+  scale_colour_manual( values = c("Predicted Values"="blue", "Actual Values"="red") ) +
+  labs(title="Predicted and Actual Values for the Test Data") +
+  xlab("Case Number") +
+  ylab("Umsatz in €") 
+```
+
+```{r}
+# Vorhersage für einen einzelnen Fall
+cat(paste0("Vorhergesagter Umsatz:\t", format(test_predictions[100], digits=2, nsmall =0)))
+cat(paste0("\nTatsächlicher Umsatz:\t", test_actuals[100]))
+```

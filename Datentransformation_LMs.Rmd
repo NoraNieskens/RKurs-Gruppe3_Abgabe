@@ -1,0 +1,155 @@
+---
+title: "Niels' Transformationen"
+---
+
+1. Ladet die nötigen Pakete und Datensätze:
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+library(broom)
+library(tidyverse)
+
+#hallo
+umsaetze <- read_csv("umsatzdaten_gekuerzt_real.csv")
+wetter <- read_csv("wetter_real.csv")
+kiwo <- read_csv("kiwo_real.csv")
+```
+
+2. Fügt die Codes für Waren und Wetter ein: "Warentyp" statt "Warengruppe" und "Wettertyp" statt "Wettercode"
+
+```{r}
+umsatz_index <- c(1:6)
+umsatz_values <- c("Brot", "Broetchen", "Croissant", "Konditorei", "Kuchen", "Saisonbrot")
+umsaetze$Warentyp <- umsatz_values[match(umsaetze$Warengruppe, umsatz_index)]
+umsaetze$Warengruppe <- NULL
+View(umsaetze)
+
+```
+
+3. Fügt die Datensätze zum Wetter und zum Umsatz zusammen: UmsatzW
+ + fügt die Wochentage ein
+```{r}
+wetter2 <- wetter %>%
+  select(Datum, Temperatur)
+
+
+#?merge
+#UmsatzW<- merge(umsaetze, wetter["Temperatur"], all.x=FALSE)
+UmsatzW <- left_join(umsaetze, wetter2)
+UmsatzW$Wochentag <- weekdays(UmsatzW$Datum)
+UmsatzW <- left_join(UmsatzW, kiwo)
+UmsatzW$KielerWoche[is.na(UmsatzW$KielerWoche)] <- 0
+
+View(UmsatzW)
+```
+
+4. Spaltet das Datum in Jahr, Monat und Tag auf:
+```{r}
+UmsatzW <- UmsatzW %>% 
+  mutate_at(vars(Datum), funs(year, month, day)) %>% 
+  rename(
+    Jahr = year,
+    Monat = month,
+    Tag = day
+    )
+UmsatzW$Jahr <- as.factor(UmsatzW$Jahr)
+UmsatzW$Monat <- as.factor(UmsatzW$Monat)
+UmsatzW$Tag <- as.factor(UmsatzW$Tag)
+```
+
+5. fügt Ferien und Feiertage hinzu 
+
+```{r}
+ferien <- read_delim("Ferien_SH_NEU.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+
+feiertage <-dataset <- read_delim("FeiertageSH_2013_2019_NEU_csv.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+#Herausfiltern der wochentage
+ferien$Datum <-  as.Date(ferien$Datum, "%d.%m.%Y")
+
+feiertage$Datum <-  as.Date(feiertage$Datum, "%d.%m.%Y")
+
+
+
+
+#joined ferien und feiertage und fügt es dem Umsatzdatensatz hinzu
+
+ferien_feiertage <- left_join(ferien, feiertage)
+
+UmsatzWF <- left_join(UmsatzW, ferien_feiertage)
+
+#ersetzt NAs durch 0
+
+UmsatzWF$Feiertag[is.na(UmsatzWF$Feiertag)] <- 0
+UmsatzWF$KielerWoche[is.na(UmsatzWF$KielerWoche)] <- 0
+UmsatzWF$Ferienname[is.na(UmsatzWF$Ferienname)] <- 0
+
+UmsatzWF<- na.omit(UmsatzWF)
+UmsatzWF<- subset(UmsatzWF, Warentyp != "Saisonbrot")
+
+
+View(UmsatzWF)
+write.csv(UmsatzWF, "UmsatzWF.csv", row.names = FALSE)
+
+```
+```{r}
+
+```
+
+
+
+=======
+
+
+Beispiele für Lineares Modell: kombinierter Einfluss verschiedener Variablen auf Umsatz
+
+
+```{r}
+model1 <- lm(Umsatz ~ Wochentag + Warentyp + Monat, data = UmsatzWF)
+```
+
+
+```{r}
+model2 <- lm(Umsatz ~ Wochentag + Warentyp + Monat + KielerWoche + Ferienname, data = UmsatzWF)
+
+model3 <- lm(Umsatz ~ Wochentag + Warentyp + Monat + KielerWoche + Ferienname + Feiertag + Jahr, data = UmsatzWF)
+rbind(glance(model1),glance(model2),glance(model3))
+```
+
+```{r}
+model2 <- lm(Umsatz ~ Temperatur + Warentyp, data = UmsatzWF)
+
+```
+
+```{r}
+model3 <- lm(Umsatz ~ Monat + Warentyp, data = UmsatzWF)
+
+```
+
+```{r}
+model4 <- lm(formula = Umsatz ~ Wochentag + Monat + Warentyp, data = UmsatzWF)
+
+```
+
+```{r}
+model5 <- lm(formula = Umsatz ~ Wochentag + Ferienname + Monat + Warentyp, 
+    data = UmsatzWF)
+
+```
+
+
+```{r}
+model6 <- lm(formula = Umsatz ~ Warentyp +Wochentag+Monat+KielerWoche+Ferienname+Feiertag, data = UmsatzWF)
+
+```
+```{r}
+rbind(glance(model1), glance(model2), glance(model3), glance(model4), glance(model5), glance(model6))
+```
+

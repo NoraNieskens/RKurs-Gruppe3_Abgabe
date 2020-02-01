@@ -1,0 +1,6 @@
+Datum;Temperatur;Wochentag;KielerWoche;Jahr;Monat;Tag;Ferienname;Feiertag;Warentyp;Umsatz_LM;Umsatz_SVM;Umsatz_ANN
+01.06.2019;16.3;Samstag;0;2019;6;1;0;0;Brot;170,6734;174,2586;158,8289
+01.06.2019;16.3;Samstag;0;2019;6;1;0;0;Broetchen;489,2264;490,7747;469,4040
+01.06.2019;16.3;Samstag;0;2019;6;1;0;0;Croissant;223,6328;236,2956;208,6315
+01.06.2019;16.3;Samstag;0;2019;6;1;0;0;Konditorei;113,9552;64,9862;115,6419
+01.06.2019;16.3;Samstag;0;2019;6;1;0;0;Kuchen;328,4319;318,3231;334,6337

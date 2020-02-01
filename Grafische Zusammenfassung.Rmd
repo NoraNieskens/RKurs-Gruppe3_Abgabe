@@ -1,0 +1,68 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Aufgabe 1:
+
+```{r}
+
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(dplyr)
+UmsatzWF <- read.csv("C:/Users/niels/Desktop/Gruppe-3/Gruppe-3/UmsatzWF.csv")
+#  View(UmsatzWF)
+means = UmsatzWF %>%
+           group_by(Ferienname) %>%
+           summarise(UmsatzM = mean(Umsatz), CI = 1.96 * sd(Umsatz)/sqrt(length(Umsatz)))
+means$Ferienname <- factor(means$Ferienname, levels = c(0, "Osterferien", "Sommerferien", "Herbstferien", "Winterferien"))
+means[order(means$Ferienname),]
+ggplot(means,aes(Ferienname, UmsatzM)) + 
+  geom_bar(stat="identity", fill = "firebrick2") + 
+  geom_errorbar(aes(ymin=UmsatzM - CI, ymax=UmsatzM + CI, width=0.4), size=1.25) + 
+  theme(plot.title=element_text(size=20),axis.title.x=element_text(size=20),axis.title.y=element_text(size=20), axis.text.x=element_text(size=16), axis.text.y=element_text(size=14))  + 
+  scale_y_continuous("mittl. Umsatz (€) +- 95% CI") + 
+  scale_x_discrete("Ferien") +
+  theme_bw()
+
+```
+
+
+Aufgabe 2:
+
+```{r}
+
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(dplyr)
+
+# load data
+UmsatzWF <- read.csv("C:/Users/niels/Desktop/Gruppe-3/Gruppe-3/UmsatzWF.csv")
+# calculate means + CI
+meansWG = UmsatzWF %>%
+           group_by(Ferienname, Warentyp) %>%
+           summarise(UmsatzM = mean(Umsatz), CI = 1.96 * sd(Umsatz)/sqrt(length(Umsatz)))
+# sort the weekdays
+means$Ferienname <- factor(means$Ferienname, levels = c(0, "Osterferien", "Sommerferien", "Herbstferien", "Winterferien"))
+meansWG[order(meansWG$Ferienname),]
+# make plot
+ggplot(meansWG,aes(Ferienname, UmsatzM)) + 
+  facet_wrap(~ Warentyp) + 
+  theme(axis.text.x = element_text(angle = 45)) + 
+  geom_bar(stat="identity", fill = "firebrick2") + 
+  geom_errorbar(aes(ymin=UmsatzM - CI, ymax=UmsatzM + CI, width=0.4), size=1.25) + 
+  theme(plot.title=element_text(size=20),axis.title.x=element_text(size=20),axis.title.y=element_text(size=20), axis.text.x=element_text(size=16), axis.text.y=element_text(size=14))  + 
+  scale_y_continuous("mittl. Umsatz (€) +- 95% CI") + 
+  scale_x_discrete("Ferien") +
+  theme_bw()
+
+```
+
+
+
+# #my.cols<-c('#48D1CC','#000099','#fc9272','#cb181d')
+
+#  geom_hline(yintercept=1, linetype = "dashed") + 
+#  scale_color_manual(values = my.cols)
